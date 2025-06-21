@@ -61,7 +61,7 @@ with open(mailTemplatePath, "r", encoding="utf-8") as f:
 template = Template(templateSentence)
 filled = template.substitute(context) # templateの該当箇所にcontext内容を埋め込む
 
-print(filled)
+# print(filled)
 
 # ファイルの保存
 workBook.save()
