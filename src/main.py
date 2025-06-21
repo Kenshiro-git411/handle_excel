@@ -1,5 +1,8 @@
 import os
 import xlwings as xw
+import win32com.client
+import tkinter as tk
+import tkinter.messagebox as messagebox
 from string import Template
 from dotenv import load_dotenv
 
@@ -10,6 +13,9 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 ################################################################################
+# 定義と環境変数取得
+class CustomError(Exception):
+    pass
 
 # 操作ファイルpath
 bookPath = os.environ['BOOK_PATH']
@@ -40,7 +46,13 @@ contents = workSheet.range("B3").value
 messages = workSheet.range("B4").value
 remarks = workSheet.range("B5").value
 status = workSheet.range("B6").value
-mail_address = workSheet.range("B4").value
+mail_address = workSheet.range("B7").value
+
+# statusチェック
+if not status == "OK":
+    tk.Tk().withdraw()
+    messagebox.showerror('日報ファイルエラー', '日報ファイルの状態がOKではありません。OKにしてからやり直してください。')
+    raise CustomError("状態の値がOKではありません")
 
 # 日付形式 -> 年月日（曜日）
 key = day.strftime('%a')
@@ -59,12 +71,22 @@ with open(mailTemplatePath, "r", encoding="utf-8") as f:
     templateSentence = f.read()
 
 template = Template(templateSentence)
-filled = template.substitute(context) # templateの該当箇所にcontext内容を埋め込む
-
-# print(filled)
+mail_body = template.substitute(context) # templateの該当箇所にcontext内容を埋め込む
 
 # ファイルの保存
 workBook.save()
 
 # ファイルを閉じる
 workBook.close()
+
+outlook = win32com.client.Dispatch("Outlook.Application")
+mail = outlook.CreateItem(0)
+
+# 宛先
+mail.To = mail_address
+# 本文形式
+mail.BodyFormat = 2
+# 本文
+mail.Body = mail_body
+
+mail.Display()
