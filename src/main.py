@@ -1,6 +1,8 @@
 import os
 import xlwings as xw
 import win32com.client
+import pythoncom
+import psutil
 import tkinter as tk
 import tkinter.messagebox as messagebox
 from string import Template
@@ -17,6 +19,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 class CustomError(Exception):
     pass
 
+# メールイベントフラグ
+mail_event = True
+
+# メール送信フラグ
+exit_flag = False
+
 # 操作ファイルpath
 bookPath = os.environ['BOOK_PATH']
 mailTemplatePath = os.path.abspath(os.path.join(BASE_DIR, "..", "src", "mail", "mail_template.txt"))
@@ -28,6 +36,34 @@ sheetName = "sheet1"
 d_week = {'Sun': '日', 'Mon': '月', 'Tue': '火', 'Wed': '水', 'Thu': '木', 'Fri': '金', 'Sat': '土'}
 
 ################################################################################
+
+# メールの確認イベント
+class MailEvents:
+    def OnSend(self, cancel):
+        global exit_flag
+        print("送信イベントが発生しました")
+        root = tk.Tk()
+        root.withdraw()
+        result = messagebox.askyesno("確認", "本当にこのメールを送信しますか")
+        
+        if not result:
+            cancel.Value = True # 送信キャンセル
+            messagebox.showinfo("キャンセル", "送信を中止しました")
+        else:
+            messagebox.showinfo("送信", "メールが送信されました")
+            exit_flag = True
+        
+        root.destroy()
+
+# outlookが起動中確認処理
+def is_outlook_running():
+    for proc in psutil.process_iter(['name']):
+        if proc.info['name'] and 'OUTLOOK.EXE' in proc.info['name'].upper():
+            return True
+    return False
+
+def mail_final_check():
+    pass
 
 # メールのtemplateテキストが存在するか確認する
 if not os.path.exists(mailTemplatePath):
@@ -82,11 +118,30 @@ workBook.close()
 outlook = win32com.client.Dispatch("Outlook.Application")
 mail = outlook.CreateItem(0)
 
+# イベントをフック
+mail_with_events = win32com.client.WithEvents(mail, MailEvents)
+
 # 宛先
 mail.To = mail_address
 # 本文形式
 mail.BodyFormat = 2
+# メールタイトル
+mail.Subject = "業務日報の連絡"
 # 本文
 mail.Body = mail_body
 
+# outlookの新規メール画面を表示
 mail.Display()
+
+# イベント監視ループ
+print("送信イベント監視中")
+while mail_event:
+    pythoncom.PumpWaitingMessages()
+
+    if exit_flag:
+        print("監視を終了します")
+        break
+
+    if not is_outlook_running():
+        print("Outlookが終了されたため、監視を終了します")
+        break
